@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tangkap Ikan - Tombol Pojok</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: linear-gradient(145deg, #0b3b5c, #1b5a7a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+        }
+        .game-container {
+            background: #0a2f44;
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            border: 3px solid #ffb347;
+            width: fit-content;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #87CEEB;
+            border-radius: 20px;
+            box-shadow: inset 0 0 20px #fff3;
+            width: 100%;
+            height: auto;
+        }
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 15px 0 10px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-shadow: 2px 2px 0 #000;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .score, .timer, .level {
+            background: #2c3e50;
+            padding: 8px 20px;
+            border-radius: 40px;
+            border: 2px solid #f1c40f;
+        }
+        .level {
+            background: #1e4a6b;
+            border-color: #e67e22;
+        }
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .ctrl-btn {
+            background: #f1c40f;
+            border: none;
+            color: #1e2a3a;
+            font-weight: bold;
+            font-size: 2rem;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 3px solid #d4ac0d;
+            box-shadow: 0 5px 0 #b7950b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ctrl-btn:active {
+            transform: translateY(5px);
+            box-shadow: none;
+        }
+        .ctrl-btn:hover {
+            background: #d4ac0d;
+        }
+        .restart-btn {
+            background: #f1c40f;
+            border: none;
+            color: #1e2a3a;
+            font-weight: bold;
+            padding: 8px 25px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: 0.2s;
+            border: 2px solid #d4ac0d;
+        }
+        .restart-btn:hover {
+            background: #d4ac0d;
+            transform: scale(1.05);
+        }
+        .footer {
+            text-align: center;
+            margin-top: 10px;
+            color: #ccc;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="gameCanvas" width="500" height="400"></canvas>
+    
+    <div class="info-panel">
+        <div class="score">🐟 Skor: <span id="scoreValue">0</span></div>
+        <div class="timer">⏳ Waktu: <span id="timerValue">30</span>s</div>
+        <div class="level">🎣 Level: <span id="levelValue">Pemula</span></div>
+    </div>
+
+    <!-- Tombol pojok kiri dan kanan -->
+    <div class="button-row">
+        <button class="ctrl-btn" id="btnLeft">←</button>
+        <button class="restart-btn" id="restartBtn">🔄 Ulang</button>
+        <button class="ctrl-btn" id="btnRight">→</button>
+    </div>
+
+    <div class="footer">Klik tombol kiri/kanan untuk gerakkan ember | tangkap ikan sebanyak-banyaknya!</div>
+</div>
+
+<script>
+    // === SETUP CANVAS ===
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreSpan = document.getElementById('scoreValue');
+    const timerSpan = document.getElementById('timerValue');
+    const levelSpan = document.getElementById('levelValue');
+    const restartBtn = document.getElementById('restartBtn');
+    const btnLeft = document.getElementById('btnLeft');
+    const btnRight = document.getElementById('btnRight');
+
+    // === GAME STATE ===
+    let gameActive = true;
+    let score = 0;
+    let timeLeft = 30;
+    let frameId;
+    let timerInterval = null;
+
+    // === EMBER (Pemain) ===
+    let bucket = {
+        x: canvas.width/2 - 35,
+        y: canvas.height - 70,
+        width: 70,
+        height: 40,
+        speed: 8
+    };
+
+    // === IKAN ===
+    let fishes = [];
+    const FISH_WIDTH = 30;
+    const FISH_HEIGHT = 20;
+    const MAX_FISHES = 5;
+    const FISH_SPAWN_RATE = 30;
+
+    let frameCounter = 0;
+
+    // === KONTROL TOMBOL ===
+    let leftPressed = false;
+    let rightPressed = false;
+
+    btnLeft.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        leftPressed = true;
+    });
+    btnLeft.addEventListener('mouseup', () => { leftPressed = false; });
+    btnLeft.addEventListener('mouseleave', () => { leftPressed = false; });
+    btnLeft.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        leftPressed = true;
+    });
+    btnLeft.addEventListener('touchend', () => { leftPressed = false; });
+
+    btnRight.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        rightPressed = true;
+    });
+    btnRight.addEventListener('mouseup', () => { rightPressed = false; });
+    btnRight.addEventListener('mouseleave', () => { rightPressed = false; });
+    btnRight.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        rightPressed = true;
+    });
+    btnRight.addEventListener('touchend', () => { rightPressed = false; });
+
+    // === FUNGSI SPAWN IKAN ===
+    function spawnFish() {
+        let x = Math.random() * (canvas.width - FISH_WIDTH);
+        let y = 0 - FISH_HEIGHT;
+        let speed = 2 + Math.random() * 3;
+        fishes.push({
+            x: x,
+            y: y,
+            width: FISH_WIDTH,
+            height: FISH_HEIGHT,
+            speed: speed
+        });
+    }
+
+    // === UPDATE POSISI & DETEKSI ===
+    function update() {
+        if (!gameActive) return;
+
+        if (leftPressed && bucket.x > 0) {
+            bucket.x -= bucket.speed;
+        }
+        if (rightPressed && bucket.x + bucket.width < canvas.width) {
+            bucket.x += bucket.speed;
+        }
+
+        frameCounter++;
+        if (frameCounter % FISH_SPAWN_RATE === 0 && fishes.length < MAX_FISHES) {
+            spawnFish();
+        }
+
+        for (let i = fishes.length - 1; i >= 0; i--) {
+            let fish = fishes[i];
+            fish.y += fish.speed;
+
+            if (fish.y + fish.height > bucket.y &&
+                fish.y < bucket.y + bucket.height &&
+                fish.x + fish.width > bucket.x &&
+                fish.x < bucket.x + bucket.width) {
+                fishes.splice(i, 1);
+                score++;
+                scoreSpan.textContent = score;
+                updateLevel();
+                continue;
+            }
+
+            if (fish.y > canvas.height) {
+                fishes.splice(i, 1);
+            }
+        }
+    }
+
+    function updateLevel() {
+        let levelText = 'Pemula';
+        if (score > 70) levelText = 'Dewa Mancing';
+        else if (score > 50) levelText = 'Senior Mancing';
+        else if (score > 30) levelText = 'Junior Mancing';
+        else if (score > 10) levelText = 'Biasa';
+        levelSpan.textContent = levelText;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#4aa3df';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#7ec8e3';
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(100 + i * 120, 380, 40, 0, Math.PI, true);
+            ctx.fillStyle = '#6ab0d6';
+            ctx.fill();
+        }
+
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(bucket.x, bucket.y, bucket.width, bucket.height);
+        ctx.fillStyle = '#a0522d';
+        ctx.fillRect(bucket.x + 5, bucket.y - 10, bucket.width - 10, 10);
+        ctx.fillStyle = '#cd853f';
+        ctx.beginPath();
+        ctx.arc(bucket.x + bucket.width/2, bucket.y + bucket.height/2, 15, 0, Math.PI*2);
+        ctx.fill();
+
+        fishes.forEach(fish => {
+            ctx.fillStyle = '#f39c12';
+            ctx.beginPath();
+            ctx.ellipse(fish.x + fish.width/2, fish.y + fish.height/2, fish.width/2, fish.height/2, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(fish.x + fish.width - 8, fish.y + 8, 3, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(fish.x, fish.y + fish.height/2);
+            ctx.lineTo(fish.x - 10, fish.y + 5);
+            ctx.lineTo(fish.x - 10, fish.y + fish.height - 5);
+            ctx.closePath();
+            ctx.fill();
+        });
+
+        if (!gameActive) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 30px Arial';
+            ctx.fillStyle = '#f1c40f';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2);
+            ctx.font = '20px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('Skor akhir: ' + score, canvas.width/2, canvas.height/2 + 40);
+            ctx.fillText('Level: ' + levelSpan.textContent, canvas.width/2, canvas.height/2 + 70);
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        frameId = requestAnimationFrame(gameLoop);
+    }
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (!gameActive) return;
+            timeLeft--;
+            timerSpan.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                timerSpan.textContent = 0;
+                gameActive = false;
+                clearInterval(timerInterval);
+            }
+        }, 1000);
+    }
+
+    function restartGame() {
+        gameActive = true;
+        score = 0;
+        timeLeft = 30;
+        fishes = [];
+        bucket.x = canvas.width/2 - 35;
+        leftPressed = false;
+        rightPressed = false;
+        frameCounter = 0;
+        scoreSpan.textContent = score;
+        timerSpan.textContent = timeLeft;
+        updateLevel();
+        if (timerInterval) clearInterval(timerInterval);
+        startTimer();
+    }
+
+    restartBtn.addEventListener('click', restartGame);
+
+    restartGame();
+    gameLoop();
+</script>
+</body>
+</html>
